@@ -61,9 +61,8 @@ papillon-leads/
 
 ### 2. Backend on the VPS
 ```bash
-sudo mkdir -p /opt/papillon-leads && sudo chown $USER /opt/papillon-leads
-# copy the backend/ folder to /opt/papillon-leads/backend
-cd /opt/papillon-leads/backend
+cd /home/sachin && git clone https://github.com/Sachin-kalaiselvan/papillon-leads.git
+cd /home/sachin/papillon-leads/backend
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env && nano .env            # fill in keys
 sudo cp deploy/papillon-leads.service /etc/systemd/system/

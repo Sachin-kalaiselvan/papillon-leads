@@ -3,12 +3,12 @@ Description=Papillon lead pipeline (intake, auto-calls, WhatsApp, reports)
 After=network-online.target
 
 [Service]
-WorkingDirectory=/opt/papillon-leads/backend
-EnvironmentFile=/opt/papillon-leads/backend/.env
-ExecStart=/opt/papillon-leads/backend/.venv/bin/uvicorn papillon.main:app --host 127.0.0.1 --port 8090 --proxy-headers --workers 1
+User=sachin
+WorkingDirectory=/home/sachin/papillon-leads/backend
+EnvironmentFile=/home/sachin/papillon-leads/backend/.env
+ExecStart=/home/sachin/papillon-leads/backend/.venv/bin/uvicorn papillon.main:app --host 127.0.0.1 --port 8090 --proxy-headers --workers 1
 Restart=always
 RestartSec=3
-User=www-data
 
 [Install]
 WantedBy=multi-user.target
