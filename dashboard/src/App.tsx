@@ -4,6 +4,7 @@ import { NavLink, Navigate, Route, Routes, useLocation } from "react-router-dom"
 import { Butterfly, ease } from "./components/ui";
 import { api, resetDemo, switchDemoOrg } from "./lib/api";
 import { useStore } from "./lib/store";
+import threxaLogo from "./assets/threxa-logo.png";
 import Calls from "./views/Calls";
 import Campaigns from "./views/Campaigns";
 import LeadDetail from "./views/LeadDetail";
@@ -32,8 +33,10 @@ function Login() {
   return (
     <div className="login">
       <motion.div className="login-art" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 1 }}>
-        <Butterfly size={180} />
-        <p>Every enquiry, called and understood — before it reaches the studio.</p>
+        <img src={threxaLogo} alt="Threxa" className="login-threxa" />
+        <div className="login-for"><span>for</span></div>
+        <Butterfly size={120} />
+        <p>Every Papillon enquiry, called and understood — before it reaches the studio.</p>
       </motion.div>
       <motion.form className="login-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ ease, duration: 0.6, delay: 0.2 }}
         onSubmit={async (e) => {
@@ -41,8 +44,8 @@ function Login() {
           try { await api.signIn(email, password); const s = await api.session(); setSession(s); await reload(); }
           catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
         }}>
-        <div className="kicker">Papillon Interiors</div>
-        <h1>Lead Atelier</h1>
+        <div className="kicker">Threxa for Papillon Interiors</div>
+        <h1>Papillon Leads</h1>
         <label>Email<input value={email} onChange={(e) => setEmail(e.target.value)} type="email" required autoFocus /></label>
         <label>Password<input value={password} onChange={(e) => setPassword(e.target.value)} type="password" required /></label>
         {err && <div className="error">{err}</div>}
@@ -64,11 +67,18 @@ export default function App() {
   return (
     <div className="shell">
       <aside className="side">
-        <div className="brand">
-          <Butterfly size={38} />
-          <div>
-            <div className="brand-name">Papillon</div>
-            <div className="brand-sub">Lead Atelier</div>
+        <div className="brand-block">
+          <motion.img src={threxaLogo} alt="Threxa" className="threxa-logo"
+            initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease }} />
+          <motion.div className="built-for" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.35 }}>
+            <span>for</span>
+          </motion.div>
+          <div className="brand">
+            <Butterfly size={34} />
+            <div>
+              <div className="brand-name">Papillon</div>
+              <div className="brand-sub">Interiors · Leads</div>
+            </div>
           </div>
         </div>
         <nav>
