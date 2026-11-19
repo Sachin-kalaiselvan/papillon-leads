@@ -1,6 +1,6 @@
 # Papillon Interiors — lead pipeline
 
-Ads and forms bring in enquiries → each one gets an automatic call within minutes → the call collects the requirement → the system classifies it Hot / Warm / Cold → only qualified leads go to Papillon's team (WhatsApp + email) → the team moves them through consultation, site visit, quotation and won/lost on the dashboard → daily and weekly reports go out automatically.
+Ads and forms bring in enquiries → each one gets a WhatsApp message within minutes → an assistant chats with them and collects the requirement → the system classifies it Hot / Warm / Cold → only qualified leads go to Papillon's team (WhatsApp + email) → the team moves them through consultation, site visit, quotation and won/lost on the dashboard → daily and weekly reports go out automatically.
 
 ```
 papillon-leads/
@@ -11,9 +11,8 @@ papillon-leads/
 │   │   ├── api.py, auth.py      dashboard API + logins
 │   │   ├── users.py             add / remove dashboard logins
 │   │   ├── intake.py            every enquiry enters here: clean, dedupe, queue the call
-│   │   ├── dialer.py            places calls, retries, call window, missed-call WhatsApp
-│   │   ├── voice_bot.py         the phone conversation (Exotel → Deepgram → GPT → Sarvam voice)
-│   │   ├── whatsapp.py          same questions over WhatsApp (NRI numbers, missed calls, gaps)
+│   │   ├── followup.py          opens the WhatsApp chat, reminders, contact window
+│   │   ├── whatsapp.py          the WhatsApp assistant (Groq free tier)
 │   │   ├── qualifier.py         the script, what gets saved, what happens after a conversation
 │   │   ├── scoring.py           Papillon's rules → Hot / Warm / Cold / not a fit
 │   │   ├── forward.py           sends qualified leads to Papillon only
@@ -33,16 +32,16 @@ papillon-leads/
 | 1–2 Homeowners, new purchases / handovers first | Ad audiences below; **Rules → Projects in handover** gives those leads priority |
 | 3 Full home & turnkey first, then kitchen / wardrobes / partial | Score weights in `scoring.py`; each scope has its own minimum budget |
 | 4 ₹15 L+ full-home budget | `min_budget_full_home` = ₹15 L; "reasonably aligned" = within 85% (editable) |
-| 5 Location, configuration, area, possession, budget, timeline | Asked on the call / WhatsApp, saved field by field |
-| 6 Owner or authorised decision-maker | Asked politely on every call; tenants and brokers are held back |
-| 7 Contact and pre-qualify every prospect | Call within ~1 minute (inside 10:00–19:30 IST), 4 attempts, WhatsApp after the first miss |
+| 5 Location, configuration, area, possession, budget, timeline | Asked by the WhatsApp assistant, saved field by field |
+| 6 Owner or authorised decision-maker | Asked politely in every chat; tenants and brokers are held back |
+| 7 Contact and pre-qualify every prospect | WhatsApp within ~1 minute (inside 10:00–19:30 IST), reminders every 24 h, marked unreachable after 4 unanswered messages |
 | 8 Hot / Warm / Cold | Hot: starts within a month + possession received/≤3 months + full budget. Warm: starts within 3 months. Cold: 3–6 months out, budget short, or not ready to meet — kept and re-called after 30 days |
 | 9 Forward only verified, relevant leads | Only Hot + Warm are forwarded (editable). Papillon's logins can't see anything else |
 | 10 Exclusive to Papillon | Ads run under Papillon's brand, leads live in one database, forwarding goes only to Papillon's numbers/emails, every forward is logged with "exclusive_to" |
 | 11 Daily + weekly reports | Emailed automatically and on the **Reports** page |
 | 12 Consultations, site visits, quotations, conversions | Pipeline board + stage function; weekly report shows each by campaign with cost per qualified lead |
 
-"Don't limit to Karnataka" is handled this way: **the buyer can be anywhere** — Dubai, the US, Pune, Hyderabad. Overseas numbers are qualified on WhatsApp first (no international calling cost). What's checked is where the **property** is. It defaults to Bengaluru areas; if Papillon takes outstation projects, switch on **Rules → Accept projects outside these areas** (with its own minimum budget, default ₹25 L) or add the cities to the service-area list.
+"Don't limit to Karnataka" is handled this way: **the buyer can be anywhere** — Dubai, the US, Pune, Hyderabad. WhatsApp works the same for overseas numbers. What's checked is where the **property** is. It defaults to Bengaluru areas; if Papillon takes outstation projects, switch on **Rules → Accept projects outside these areas** (with its own minimum budget, default ₹25 L) or add the cities to the service-area list.
 
 ---
 
@@ -76,23 +75,20 @@ curl https://leadsapi.papilloninteriors.in/health      # → {"ok":true}
 ```
 GoDaddy (papilloninteriors.in → DNS): add an A record `leadsapi` → the VPS IP. The dashboard goes on `leads.papilloninteriors.in` (step 6).
 
-### 3. Calling (Exotel)
-1. Exotel account with KYC, buy a Bengaluru ExoPhone (080…).
-2. Ask Exotel support to enable **Connect Voice AI (AgentStream / Voicebot)** on the account.
-3. Put API key, token, SID and the ExoPhone in `.env`. Nothing to set up in their flow builder — the backend gives Exotel the stream address per call.
-4. Keys for speech: Deepgram (listening), Sarvam (Indian English voice, `priya`), OpenAI (conversation).
+### 3. The assistant's brain (free)
+console.groq.com → API Keys → create one → put it in `.env` as `LLM_API_KEY`. Free tier; no card needed.
 
 ### 4. WhatsApp (Meta Cloud API)
 Use a number branded Papillon Interiors. Create three templates (Utility category), then put their names in `.env`:
 
 - `papillon_enquiry_intro` — *Hi {{1}}, this is Papillon Interiors about your home interiors enquiry. Could you reply here so we can understand your requirement? Reply STOP to opt out.*
-- `papillon_missed_call` — *Hi {{1}}, we just tried calling you from Papillon Interiors about your interiors enquiry. Reply here to continue on WhatsApp, or tell us a good time to call.*
+- `papillon_enquiry_reminder` — *Hi {{1}}, following up from Papillon Interiors on your interiors enquiry. Reply here whenever it suits you and we'll take it from there.*
 - `papillon_new_lead` (to the studio) — *New {{1}} lead {{2}}: {{3}}. {{4}} Open: {{5}}*
 
 Webhook URL: `https://leadsapi.papilloninteriors.in/webhooks/whatsapp`, verify token = `WA_VERIFY_TOKEN`, subscribe to `messages`.
 
 ### 5. Lead sources
-- **Meta Lead Ads** — form type *Higher intent*. Questions: full name, phone, email, plus custom questions *Project / society name*, *Locality*, *BHK*, *Possession status*, *Interior budget* (multiple choice: under 10 L / 10–15 L / 15–25 L / 25–40 L / 40 L+), *What do you need?*. Custom disclaimer: *"Papillon Interiors may call me (including an automated assistant) and WhatsApp me about my enquiry."* Webhook: `…/webhooks/meta` (field `leadgen`), page token in `.env`.
+- **Meta Lead Ads** — form type *Higher intent*. Questions: full name, phone, email, plus custom questions *Project / society name*, *Locality*, *BHK*, *Possession status*, *Interior budget* (multiple choice: under 10 L / 10–15 L / 15–25 L / 25–40 L / 40 L+), *What do you need?*. Custom disclaimer: *"Papillon Interiors may WhatsApp me (including an automated assistant) and call me about my enquiry."* Webhook: `…/webhooks/meta` (field `leadgen`), page token in `.env`.
 - **Google Ads lead form** — Webhook URL `…/webhooks/google`, key = `GOOGLE_LEAD_KEY`.
 - **Website** — `website/EnquiryForm.tsx` → in the Papillon site repo put it at `src/components/EnquiryForm.tsx`, render `<EnquiryForm />` on the contact/consultation section, add `VITE_LEADS_API=https://leadsapi.papilloninteriors.in` in that project's Vercel env vars, and add the site URL to `ALLOWED_ORIGINS`.
 - **CSV** (builder handover lists, referrals) — `POST /admin/import` with the admin token. Rows need a `consent` column = yes, otherwise they're stored but never auto-called.
@@ -121,9 +117,9 @@ Keeps the last 7 days (one file per weekday).
 Ad copy should name Papillon and say a designer will call — never "get 3 free quotes", which brings shared, low-intent leads and breaks exclusivity.
 
 ## Day-to-day
-- **You:** watch *Overview* and *Calls*, log ad spend in *Campaigns* (needed for cost per qualified lead), tune *Rules*.
-- **Papillon:** open forwarded leads (WhatsApp/email link), read the call summary and transcript, call the customer, drag the card along the *Pipeline*. Quotation and Won ask for the value; Lost asks why.
-- Admin actions (with `Authorization: Bearer <ADMIN_TOKEN>`): `POST /admin/leads/{id}/call-now`, `/rescore`, `/erase` (data-deletion request), `/admin/reports/daily?start=2026-11-18`.
+- **You:** watch *Overview*, log ad spend in *Campaigns* (needed for cost per qualified lead), tune *Rules*.
+- **Papillon:** open forwarded leads (WhatsApp/email link), read the summary and WhatsApp chat, call the customer, drag the card along the *Pipeline*. Quotation and Won ask for the value; Lost asks why.
+- Admin actions (with `Authorization: Bearer <ADMIN_TOKEN>`): `POST /admin/leads/{id}/contact-now`, `/rescore`, `/erase` (data-deletion request), `/admin/reports/daily?start=2026-11-18`.
 
 ## Tests
 ```bash

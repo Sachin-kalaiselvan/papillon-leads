@@ -23,7 +23,7 @@ function ScoreRing({ score }: { score: number }) {
 export default function LeadDetail() {
   const { id } = useParams();
   const { snap, session } = useStore();
-  const [tab, setTab] = useState<"calls" | "whatsapp" | "timeline">("calls");
+  const [tab, setTab] = useState<"calls" | "whatsapp" | "timeline">("whatsapp");
   const [msgs, setMsgs] = useState<Message[]>([]);
   const [pending, setPending] = useState<Stage | null>(null);
   const [openCall, setOpenCall] = useState<string | null>(null);
@@ -112,15 +112,15 @@ export default function LeadDetail() {
           {agency && (
             <motion.section className="card meta" variants={rise}>
               <h3>Contact handling</h3>
-              <p>Channel {lead.channel} · {lead.call_attempts} call attempt{lead.call_attempts === 1 ? "" : "s"}
-                {lead.next_call_at ? ` · next try ${when(lead.next_call_at)}` : ""} · enquired {lead.enquiry_count}×</p>
+              <p>WhatsApp · {lead.call_attempts} message{lead.call_attempts === 1 ? "" : "s"} without a reply
+                {lead.next_call_at ? ` · next follow-up ${when(lead.next_call_at)}` : ""} · enquired {lead.enquiry_count}×</p>
             </motion.section>
           )}
         </motion.div>
 
         <motion.section className="card convo" initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.15, ease }}>
           <div className="tabs">
-            {([["calls", `Calls (${calls.length})`], ["whatsapp", `WhatsApp (${msgs.filter((m) => m.channel === "whatsapp").length})`], ["timeline", "Timeline"]] as const).map(([k, t]) => (
+            {([["whatsapp", `WhatsApp (${msgs.filter((m) => m.channel === "whatsapp").length})`], ...(calls.length ? [["calls", `Calls (${calls.length})`] as const] : []), ["timeline", "Timeline"]] as const).map(([k, t]) => (
               <button key={k} className={tab === k ? "on" : ""} onClick={() => setTab(k)}>
                 {t}{tab === k && <motion.span layoutId="tab-line" className="tab-line" />}
               </button>

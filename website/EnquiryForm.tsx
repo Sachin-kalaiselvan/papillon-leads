@@ -5,7 +5,7 @@ import { useEffect, useState, type FormEvent } from "react";
 
 const API = (import.meta as any).env?.VITE_LEADS_API ?? "https://leadsapi.papilloninteriors.in";
 const CONSENT =
-  "I agree that Papillon Interiors may call me (including an automated assistant) and message me on WhatsApp about my interiors enquiry.";
+  "I agree that Papillon Interiors may message me on WhatsApp (including an automated assistant) and call me about my interiors enquiry.";
 
 const SCOPES = ["Complete home interiors", "Turnkey project", "Modular kitchen", "Wardrobes", "A few rooms"];
 const BUDGETS = ["Under ₹10 lakh", "₹10–15 lakh", "₹15–25 lakh", "₹25–40 lakh", "Above ₹40 lakh"];
@@ -55,7 +55,7 @@ export default function EnquiryForm() {
     return (
       <div className="pap-enquiry pap-done">
         <h3>Thank you, {f.name.split(" ")[0] || "there"}.</h3>
-        <p>We'll call you shortly from our Bengaluru number to understand your home. If we miss you, we'll message you on WhatsApp.</p>
+        <p>We'll message you on WhatsApp shortly to understand your home, and a designer will follow up.</p>
       </div>
     );
   }

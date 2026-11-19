@@ -5,7 +5,6 @@ import { Butterfly, ease } from "./components/ui";
 import { api, resetDemo, switchDemoOrg } from "./lib/api";
 import { useStore } from "./lib/store";
 import threxaLogo from "./assets/threxa-logo.png";
-import Calls from "./views/Calls";
 import Campaigns from "./views/Campaigns";
 import LeadDetail from "./views/LeadDetail";
 import Leads from "./views/Leads";
@@ -18,7 +17,6 @@ const NAV = [
   { to: "/", label: "Overview", icon: "M4 13h6V4H4zm10 7h6V4h-6zM4 20h6v-4H4z", agency: false },
   { to: "/pipeline", label: "Pipeline", icon: "M4 5h4v14H4zm6 0h4v9h-4zm6 0h4v6h-4z", agency: false },
   { to: "/leads", label: "Leads", icon: "M5 6h14M5 12h14M5 18h9", agency: false },
-  { to: "/calls", label: "Calls", icon: "M6 3l3 5-2 2a12 12 0 006 6l2-2 5 3-2 4C10 21 3 14 2 5z", agency: false },
   { to: "/reports", label: "Reports", icon: "M5 20V10m7 10V4m7 16v-7", agency: false },
   { to: "/campaigns", label: "Campaigns", icon: "M4 10v4l12 5V5zM16 9h4v6h-4", agency: true },
   { to: "/settings", label: "Rules", icon: "M12 8a4 4 0 100 8 4 4 0 000-8zm8 4l2-1-2-4-2 1-2-2V4h-4v2l-2 2-2-1-2 4 2 1v2l-2 1 2 4 2-1 2 2v2h4v-2l2-2 2 1 2-4-2-1z", agency: true },
@@ -123,7 +121,6 @@ export default function App() {
             <Route path="/pipeline" element={<Pipeline />} />
             <Route path="/leads" element={<Leads />} />
             <Route path="/leads/:id" element={<LeadDetail />} />
-            <Route path="/calls" element={<Calls />} />
             <Route path="/reports" element={<Reports />} />
             {agency && <Route path="/campaigns" element={<Campaigns />} />}
             {agency && <Route path="/settings" element={<SettingsView />} />}

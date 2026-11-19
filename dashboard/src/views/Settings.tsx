@@ -79,13 +79,12 @@ export default function SettingsView() {
         </motion.section>
 
         <motion.section className="card" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, ease }}>
-          <h3>Calling</h3>
+          <h3>WhatsApp follow-up</h3>
           <div className="form-grid">
-            <label>Calls from<input type="time" value={s.call_window_start.slice(0, 5)} onChange={(e) => set("call_window_start", e.target.value)} /></label>
-            <label>Calls until<input type="time" value={s.call_window_end.slice(0, 5)} onChange={(e) => set("call_window_end", e.target.value)} /></label>
-            <label>Attempts before “unreachable”<input type="number" min={1} max={8} value={s.max_call_attempts} onChange={(e) => set("max_call_attempts", Number(e.target.value))} /></label>
-            <label>Calls at the same time<input type="number" min={1} max={20} value={s.max_parallel_calls} onChange={(e) => set("max_parallel_calls", Number(e.target.value))} /></label>
-            <label>Re-check cold leads after (days)<input type="number" min={7} value={s.nurture_recheck_days} onChange={(e) => set("nurture_recheck_days", Number(e.target.value))} /></label>
+            <label>Send messages from<input type="time" value={s.call_window_start.slice(0, 5)} onChange={(e) => set("call_window_start", e.target.value)} /></label>
+            <label>Send messages until<input type="time" value={s.call_window_end.slice(0, 5)} onChange={(e) => set("call_window_end", e.target.value)} /></label>
+            <label>Messages without a reply before “unreachable”<input type="number" min={1} max={8} value={s.max_call_attempts} onChange={(e) => set("max_call_attempts", Number(e.target.value))} /></label>
+            <label>Message cold leads again after (days)<input type="number" min={7} value={s.nurture_recheck_days} onChange={(e) => set("nurture_recheck_days", Number(e.target.value))} /></label>
           </div>
         </motion.section>
 

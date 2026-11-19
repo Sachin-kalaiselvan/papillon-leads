@@ -1,12 +1,11 @@
-"""WhatsApp qualification — for overseas (NRI) numbers, unanswered calls, and details a call didn't cover.
-Same questions, same scoring as the phone call."""
+"""WhatsApp qualification — the assistant asks Papillon's questions in a chat and scores the answers."""
 
 from __future__ import annotations
 
 import hashlib
 import hmac
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import httpx
 from loguru import logger
@@ -39,7 +38,7 @@ def _first(lead: dict) -> str:
 
 
 async def send_intro(lead: dict) -> None:
-    """Start a WhatsApp conversation (template — required outside the 24h window)."""
+    """Start the conversation (a template is required to message someone first)."""
     await notify.wa_template(lead["phone"], cfg.wa_tpl_intro, [_first(lead)], lead["id"],
                              f"Hi {_first(lead)}, this is {cfg.brand_name} about your home interiors enquiry. "
                              "Could you reply here so we can understand your requirement?")
@@ -47,16 +46,11 @@ async def send_intro(lead: dict) -> None:
     await db.log_event(lead["id"], "whatsapp_intro", {})
 
 
-async def send_missed_call(lead: dict) -> None:
-    await notify.wa_template(lead["phone"], cfg.wa_tpl_missed_call, [_first(lead)], lead["id"],
-                             f"Hi {_first(lead)}, we just tried calling you from {cfg.brand_name} about your interiors "
-                             "enquiry. Reply here to continue on WhatsApp, or tell us a good time to call.")
-    await db.log_event(lead["id"], "whatsapp_missed_call", {})
-
-
-async def ask_missing(lead: dict, missing: list[str]) -> None:
-    await send_intro(lead)
-    await db.log_event(lead["id"], "asked_missing", {"missing": missing})
+async def send_reminder(lead: dict) -> None:
+    await notify.wa_template(lead["phone"], cfg.wa_tpl_reminder, [_first(lead)], lead["id"],
+                             f"Hi {_first(lead)}, following up from {cfg.brand_name} on your interiors enquiry. "
+                             "Reply here whenever it suits you and we'll take it from there.")
+    await db.log_event(lead["id"], "whatsapp_reminder", {"number": lead["call_attempts"]})
 
 
 async def _history(lead_id) -> list[dict]:
@@ -73,8 +67,8 @@ async def _history(lead_id) -> list[dict]:
 
 async def _llm(messages: list[dict]) -> dict:
     async with httpx.AsyncClient(timeout=60) as http:
-        r = await http.post("https://api.openai.com/v1/chat/completions",
-                            headers={"Authorization": f"Bearer {cfg.openai_api_key}"},
+        r = await http.post(cfg.llm_api_url,
+                            headers={"Authorization": f"Bearer {cfg.llm_api_key}"},
                             json={"model": cfg.llm_model, "messages": messages, "tools": TOOLS, "temperature": 0.4})
         r.raise_for_status()
         return r.json()["choices"][0]["message"]
@@ -90,7 +84,9 @@ async def handle_inbound(from_number: str, text: str, wa_id: str | None) -> None
         "insert into messages (lead_id, channel, direction, recipient, body, provider_id, status) values (%s,'whatsapp','in',%s,%s,%s,'received')",
         [lead["id"], phone, text, wa_id],
     )
-    await db.update_lead(lead["id"], last_contact_at=datetime.now(timezone.utc))
+    await db.update_lead(lead["id"], last_contact_at=datetime.now(timezone.utc), call_attempts=0,
+                         next_call_at=datetime.now(timezone.utc) + timedelta(hours=24)
+                         if lead["status"] in ("queued", "qualifying") else lead["next_call_at"])
 
     if text.strip().lower() in STOP_WORDS:
         await finalize(lead["id"], "do_not_call", "Opted out on WhatsApp", channel="whatsapp")

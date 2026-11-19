@@ -21,6 +21,7 @@ export function summary(snap: Snapshot, days: number) {
   return {
     enquiries: leads.length,
     contacted: leads.filter((l) => l.last_contact_at).length,
+    assessed: leads.filter((l) => ["qualified", "nurture", "disqualified", "out_of_area", "do_not_contact"].includes(l.status)).length,
     calls: calls.length,
     connected: calls.filter((c) => c.answered_at).length,
     hot: q.filter((l) => l.temperature === "hot").length,

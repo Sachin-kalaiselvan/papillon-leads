@@ -7,7 +7,7 @@ import { byDay, inRange, summary } from "../lib/metrics";
 import { useStore } from "../lib/store";
 
 const EVENT_TEXT: Record<string, string> = {
-  created: "New enquiry", call_started: "Calling", call_answered: "Call answered", scored: "Assessed",
+  created: "New enquiry", whatsapp_reminder: "WhatsApp reminder sent", scored: "Assessed",
   forwarded: "Sent to the studio", stage: "Stage moved", whatsapp_intro: "WhatsApp opened",
   whatsapp_missed_call: "Missed call — WhatsApp sent", unreachable: "Unreachable after retries",
   call_retry_scheduled: "Retry scheduled", repeat_enquiry: "Enquired again", details: "Details captured",
@@ -29,7 +29,8 @@ export default function Overview() {
     .sort((a, b) => (a.temperature === "hot" ? -1 : 1) - (b.temperature === "hot" ? -1 : 1) || (b.score ?? 0) - (a.score ?? 0)).slice(0, 6);
   const funnel = [
     { k: "Enquiries", v: m.enquiries },
-    { k: "Reached", v: m.contacted },
+    { k: "Messaged", v: m.contacted },
+    { k: "Replied & assessed", v: m.assessed },
     { k: "Qualified", v: qualified },
     { k: "Consultations", v: m.consultations },
     { k: "Site visits", v: m.siteVisits },
@@ -68,7 +69,7 @@ export default function Overview() {
         <motion.div className="kpis" variants={stagger}>
           {[
             { k: "Hot", v: m.hot, cls: "hot" }, { k: "Warm", v: m.warm, cls: "warm" }, { k: "Cold · nurturing", v: m.cold, cls: "cold" },
-            { k: "Calls connected", v: m.connected, sub: `of ${m.calls}` }, { k: "Consultations", v: m.consultations },
+            { k: "Assessed on WhatsApp", v: m.assessed, sub: `of ${m.contacted} messaged` }, { k: "Consultations", v: m.consultations },
             { k: "Won", v: m.wonValue, money: true, sub: `${m.won} projects` },
           ].map((c) => (
             <motion.div key={c.k} className={`kpi ${c.cls ?? ""}`} variants={rise} whileHover={{ y: -3 }}>
@@ -87,7 +88,7 @@ export default function Overview() {
             {funnel.map((f, i) => (
               <div className="funnel-row" key={f.k}>
                 <span className="funnel-k">{f.k}</span>
-                <Bar value={f.v} max={funnel[0].v} tone={i < 2 ? "ink" : i === 2 ? "brass" : "sage"} delay={0.3 + i * 0.07} />
+                <Bar value={f.v} max={funnel[0].v} tone={i < 3 ? "ink" : i === 3 ? "brass" : "sage"} delay={0.3 + i * 0.07} />
                 <span className="funnel-v">{f.v}</span>
                 <span className="funnel-p">{i ? `${funnel[i - 1].v ? Math.round((100 * f.v) / funnel[i - 1].v) : 0}%` : ""}</span>
               </div>

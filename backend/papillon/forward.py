@@ -74,7 +74,7 @@ async def forward_lead(lead: dict, s: dict) -> dict:
 <p style="color:#4a4048;font:15px/1.5 Arial">{html.escape(summary)}</p>
 <table style="font:14px Arial;border-collapse:collapse;margin:14px 0">{rows}</table>
 <div style="font:13px Arial;color:#4a4048"><b>Why it qualified</b><ul>{reasons}</ul></div>
-<a href="{link}" style="display:inline-block;background:#1f1a24;color:#f6f1ea;padding:12px 20px;border-radius:999px;text-decoration:none;font:600 14px Arial">Open lead, call recording &amp; transcript</a>
+<a href="{link}" style="display:inline-block;background:#1f1a24;color:#f6f1ea;padding:12px 20px;border-radius:999px;text-decoration:none;font:600 14px Arial">Open lead and WhatsApp chat</a>
 <p style="font:11px Arial;color:#9a8f86;margin-top:22px">Exclusive to {html.escape(cfg.brand_name)}. This enquiry has not been shared with any other company.</p></div>"""
     text = "\n".join(f"{k}: {v}" for k, v in card_lines(lead)) + f"\n\n{summary}\n\n{link}"
     await notify.email(s.get("forward_emails") or [], f"[{temp}] New qualified lead {lead['ref']} — {one_line}", body, text, lead["id"])

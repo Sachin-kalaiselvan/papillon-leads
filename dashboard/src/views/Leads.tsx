@@ -11,7 +11,7 @@ const FILTERS: { k: string; label: string; test: (l: Lead) => boolean; agency?: 
   { k: "hot", label: "Hot", test: (l) => l.status === "qualified" && l.temperature === "hot" },
   { k: "warm", label: "Warm", test: (l) => l.status === "qualified" && l.temperature === "warm" },
   { k: "cold", label: "Cold", test: (l) => l.temperature === "cold", agency: true },
-  { k: "working", label: "Being called", test: (l) => ["new", "queued", "calling", "qualifying"].includes(l.status), agency: true },
+  { k: "working", label: "In conversation", test: (l) => ["new", "queued", "calling", "qualifying"].includes(l.status), agency: true },
   { k: "unreachable", label: "Unreachable", test: (l) => l.status === "unreachable", agency: true },
   { k: "held", label: "Not a fit", test: (l) => ["disqualified", "out_of_area", "do_not_contact"].includes(l.status), agency: true },
 ];

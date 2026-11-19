@@ -152,8 +152,8 @@ async def ingest(lead_in: dict, actor: str = "system") -> tuple[dict, bool]:
         return lead, False
 
     project_id, _ = await match_project(pre.get("project_name"))
-    # Indian mobiles get a call; overseas numbers (NRI buyers) are qualified on WhatsApp first
-    channel = "voice" if country == "IN" else "whatsapp"
+    # every enquiry is qualified on WhatsApp (works the same for Indian and overseas numbers)
+    channel = "whatsapp"
     status = "queued" if consent else "new"
     lead = await db.fetchone(
         """insert into leads (name, phone, phone_country, email, lives_in, source, campaign_id, external_lead_id,

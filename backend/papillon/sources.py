@@ -10,8 +10,8 @@ import httpx
 
 from .config import cfg
 
-META_CONSENT = "Meta lead form — custom disclaimer: Papillon Interiors may call or WhatsApp me about my interiors enquiry."
-GOOGLE_CONSENT = "Google lead form — Papillon Interiors may call or WhatsApp me about my interiors enquiry."
+META_CONSENT = "Meta lead form — custom disclaimer: Papillon Interiors may WhatsApp or call me about my interiors enquiry."
+GOOGLE_CONSENT = "Google lead form — Papillon Interiors may WhatsApp or call me about my interiors enquiry."
 
 
 def _key(s: str) -> str:

@@ -24,7 +24,7 @@ const LABELS: Record<string, string> = {
   authorised_representative: "Authorised representative", tenant: "Tenant", broker: "Broker",
   apartment: "Apartment", villa: "Villa", independent_house: "Independent house", row_house: "Row house",
   penthouse: "Penthouse", plot: "Plot", commercial: "Commercial",
-  new: "Awaiting consent", queued: "Queued to call", calling: "On a call", qualifying: "Collecting details",
+  new: "Awaiting consent", queued: "Queued to message", calling: "Messaging", qualifying: "Chatting on WhatsApp",
   unreachable: "Unreachable", qualified: "Qualified", nurture: "Nurture", out_of_area: "Out of area",
   disqualified: "Not a fit", do_not_contact: "Do not contact",
   site: "At site", studio: "At studio", video: "Video call", phone: "Phone",

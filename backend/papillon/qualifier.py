@@ -1,5 +1,5 @@
 """What the assistant asks, how answers are saved, and what happens when a conversation ends.
-Shared by the phone call (voice_bot.py) and WhatsApp (whatsapp.py)."""
+Used by the WhatsApp assistant (whatsapp.py)."""
 
 from __future__ import annotations
 
@@ -163,7 +163,7 @@ async def apply_details(lead_id, args: dict) -> dict:
 
 
 async def finalize(lead_id, outcome: str, summary: str | None = None, callback_iso: str | None = None,
-                   channel: str = "voice") -> dict:
+                   channel: str = "whatsapp") -> dict:
     """Decide what happens to the lead after a conversation ends."""
     s = await db.get_settings()
     lead = await db.get_lead(lead_id)
@@ -196,8 +196,8 @@ async def finalize(lead_id, outcome: str, summary: str | None = None, callback_i
     return lead
 
 
-async def score_and_route(lead: dict, s: dict, outcome: str = "completed", channel: str = "voice") -> dict:
-    from . import forward, whatsapp
+async def score_and_route(lead: dict, s: dict, outcome: str = "completed", channel: str = "whatsapp") -> dict:
+    from . import forward
 
     near = False
     if lead.get("project_id"):
@@ -209,10 +209,9 @@ async def score_and_route(lead: dict, s: dict, outcome: str = "completed", chann
 
     if v.status == "qualifying":
         # details still missing → ask the rest on WhatsApp; if they don't reply, another call later
-        upd.update(status="qualifying", next_call_at=next_call_time(now + timedelta(hours=4), s))
+        # details still missing → the WhatsApp follow-up nudges them again later
+        upd.update(status="qualifying", next_call_at=next_call_time(now + timedelta(hours=24), s))
         lead = await db.update_lead(lead["id"], **upd)
-        if channel == "voice" and cfg.wa_token:
-            await whatsapp.ask_missing(lead, v.missing)
     elif v.status == "qualified":
         upd.update(status="qualified", qualified_at=lead.get("qualified_at") or now)
         if v.forwardable(s):

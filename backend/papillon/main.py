@@ -9,12 +9,12 @@ import time
 from contextlib import asynccontextmanager
 from datetime import date, datetime, timezone
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile, WebSocket
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from loguru import logger
 
-from . import api, db, dialer, reports, sources, whatsapp
+from . import api, db, followup, reports, sources, whatsapp
 from .config import cfg
 from .intake import ingest
 
@@ -24,7 +24,7 @@ _bg: list[asyncio.Task] = []
 @asynccontextmanager
 async def lifespan(_app):
     await db.open_pool()
-    _bg.append(asyncio.create_task(dialer.run_forever()))
+    _bg.append(asyncio.create_task(followup.run_forever()))
     _bg.append(asyncio.create_task(reports.run_forever()))
     yield
     for t in _bg:
@@ -113,21 +113,6 @@ async def google_webhook(request: Request):
     return {}
 
 
-# ── Calls ────────────────────────────────────────────────────────
-@app.post("/webhooks/exotel/status")
-async def exotel_status(request: Request):
-    ctype = request.headers.get("content-type", "")
-    payload = await request.json() if "json" in ctype else dict(await request.form())
-    await dialer.handle_status(payload)
-    return {"ok": True}
-
-
-@app.websocket("/voice/exotel")
-async def voice(websocket: WebSocket):
-    from .voice_bot import run_call  # heavy imports only when a call comes in
-    await run_call(websocket)
-
-
 # ── WhatsApp ─────────────────────────────────────────────────────
 @app.get("/webhooks/whatsapp")
 async def wa_verify(request: Request):
@@ -176,9 +161,9 @@ async def import_csv(file: UploadFile = File(...), source: str = "import"):
     return {"added": added, "merged": merged, "invalid": bad}
 
 
-@app.post("/admin/leads/{lead_id}/call-now", dependencies=[Depends(admin)])
-async def call_now(lead_id: str):
-    lead = await db.update_lead(lead_id, status="queued", next_call_at=datetime.now(timezone.utc))
+@app.post("/admin/leads/{lead_id}/contact-now", dependencies=[Depends(admin)])
+async def contact_now(lead_id: str):
+    lead = await db.update_lead(lead_id, status="queued", call_attempts=0, next_call_at=datetime.now(timezone.utc))
     return {"queued": lead["ref"]}
 
 

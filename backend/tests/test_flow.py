@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from papillon import api, auth, db, dialer, forward, intake, notify, qualifier, reports, sources
+from papillon import api, auth, db, followup, forward, intake, notify, qualifier, reports, sources
 
 URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not URL, reason="TEST_DATABASE_URL not set")
@@ -20,10 +20,6 @@ async def _fake_wa(to, name, params, lead_id=None, log_text=None):
 async def _fake_email(to, subject, html, text, lead_id=None):
     SENT.append(("email", tuple(to), subject))
     return True
-
-
-async def _fake_exotel(phone, lead_id, call_id):
-    return f"EXO-{call_id[:8]}"
 
 
 def run(coro):
@@ -40,7 +36,6 @@ async def _setup(monkeypatch):
                      "('Prestige Lakeside Habitat','Prestige','Varthur', current_date - 60, current_date + 30)")
     monkeypatch.setattr(notify, "wa_template", _fake_wa)
     monkeypatch.setattr(notify, "email", _fake_email)
-    monkeypatch.setattr(dialer, "exotel_call", _fake_exotel)
     SENT.clear()
 
 
@@ -57,11 +52,10 @@ def test_full_journey(monkeypatch):
         again, created2 = await intake.ingest({**web, "source": "meta"})
         assert not created2 and again["id"] == lead["id"] and again["enquiry_count"] == 2
 
-        # 2. dialer picks it up
-        assert await dialer.dial_once() == 1
-        call = await db.fetchone("select * from calls where lead_id = %s", [lead["id"]])
-        assert call["provider_call_id"].startswith("EXO-")
-        assert (await db.get_lead(lead["id"]))["status"] == "calling"
+        # 2. follow-up opens the WhatsApp conversation
+        assert await followup.follow_up_once() == 1
+        assert ("wa", "+919845012345", "papillon_enquiry_intro") in SENT
+        assert (await db.get_lead(lead["id"]))["status"] == "qualifying"
 
         # 3. the conversation (what the voice bot's tools do)
         await qualifier.apply_details(lead["id"], {
@@ -87,21 +81,19 @@ def test_full_journey(monkeypatch):
         won = await db.get_lead(lead["id"])
         assert won["stage"] == "won" and won["won_value"] == 1950000
 
-        # 5. a second lead never answers → retries, WhatsApp after first miss, then unreachable
+        # 5. a second lead never replies → reminders, then unreachable
         l2, _ = await intake.ingest({"name": "Ravi", "phone": "+91 99001 23456", "consent_call": True, "source": "google"})
-        for i in range(4):
+        for _ in range(5):
             await db.execute("update leads set next_call_at = now() - interval '1 minute' where id = %s", [l2["id"]])
-            await dialer.dial_once()
-            c = await db.fetchone("select * from calls where lead_id = %s order by started_at desc limit 1", [l2["id"]])
-            await dialer.handle_status({"CallSid": c["provider_call_id"], "Status": "no-answer", "CustomField": str(c["id"])})
+            await followup.follow_up_once()
         l2 = await db.get_lead(l2["id"])
-        assert l2["status"] == "unreachable" and l2["call_attempts"] == 4
-        assert ("wa", "+919900123456", "papillon_missed_call") in SENT
+        assert l2["status"] == "unreachable"
+        assert ("wa", "+919900123456", "papillon_enquiry_reminder") in SENT
 
-        # 6. overseas number goes WhatsApp-first; tenant gets disqualified; Chennai flat is out of area
+        # 6. overseas buyer is handled the same way; tenant disqualified; Chennai flat out of area
         l3, _ = await intake.ingest({"name": "Kiran", "phone": "+1 415 555 0134", "consent_call": True})
         assert l3["channel"] == "whatsapp"
-        await dialer.dial_once()
+        await followup.follow_up_once()
         assert (await db.get_lead(l3["id"]))["status"] == "qualifying"
         l4, _ = await intake.ingest({"name": "T", "phone": "+91 98860 11111", "consent_call": True})
         await qualifier.apply_details(l4["id"], {"ownership": "tenant"})
@@ -110,10 +102,10 @@ def test_full_journey(monkeypatch):
         await qualifier.apply_details(l5["id"], {"city": "Chennai", "locality": "OMR"})
         assert (await qualifier.finalize(l5["id"], "completed"))["status"] == "out_of_area"
 
-        # 7. lead without consent is stored but never called
+        # 7. lead without consent is stored but never messaged
         l6, _ = await intake.ingest({"name": "No consent", "phone": "+91 98860 33333", "consent_call": False})
         await db.execute("update leads set next_call_at = now() where id = %s", [l6["id"]])
-        await dialer.dial_once()
+        await followup.follow_up_once()
         assert (await db.get_lead(l6["id"]))["status"] == "new"
 
         # 8. reports
@@ -130,6 +122,42 @@ def test_full_journey(monkeypatch):
         assert "Cost / qualified" in body
         snap = await api.snapshot(user)
         assert len(snap["leads"]) == 1 and snap["leads"][0]["ref"] == lead["ref"]
+        await db.close_pool()
+
+    run(go())
+
+
+def test_whatsapp_conversation(monkeypatch):
+    """A lead replies on WhatsApp; the assistant saves answers and qualifies them."""
+    from papillon import whatsapp
+    replies = []
+
+    async def fake_text(to, text, lead_id=None):
+        replies.append(text)
+
+    turns = iter([
+        {"content": None, "tool_calls": [{"id": "1", "function": {"name": "save_details", "arguments":
+            '{"city":"Bengaluru","locality":"Whitefield","property_type":"apartment","configuration":"3BHK",'
+            '"possession_status":"received","scope":"full_home","budget_min_inr":2000000,"budget_max_inr":2500000,'
+            '"timeline":"within_1_month","ownership":"owner","willing_consultation":true}'}}]},
+        {"content": "Thank you! Our design team will call you today.", "tool_calls": [{"id": "2", "function": {
+            "name": "end_conversation", "arguments": '{"outcome":"completed","summary":"3BHK Whitefield, 20-25L, keys received."}'}}]},
+    ])
+
+    async def fake_llm(messages):
+        return next(turns)
+
+    async def go():
+        await _setup(monkeypatch)
+        monkeypatch.setattr(notify, "wa_text", fake_text)
+        monkeypatch.setattr(whatsapp, "_llm", fake_llm)
+        lead, _ = await intake.ingest({"name": "Asha", "phone": "+91 98451 77777", "consent_call": True})
+        await followup.follow_up_once()
+        await whatsapp.handle_webhook({"entry": [{"changes": [{"value": {"messages": [
+            {"from": "919845177777", "id": "w1", "type": "text", "text": {"body": "Hi, 3BHK in Whitefield"}}]}}]}]})
+        done = await db.get_lead(lead["id"])
+        assert done["status"] == "qualified" and done["temperature"] == "hot" and done["stage"] == "forwarded"
+        assert replies and "design team" in replies[-1]
         await db.close_pool()
 
     run(go())
