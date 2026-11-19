@@ -7,7 +7,7 @@ papillon-leads/
 ├── database/schema.sql          PostgreSQL tables (runs on your VPS — no Supabase)
 ├── backend/                     runs on the VPS (Python)
 │   ├── papillon/
-│   │   ├── main.py              web endpoints (forms, Meta, Google, Exotel, WhatsApp, admin)
+│   │   ├── main.py              web endpoints (forms, Meta, Google, WhatsApp, admin)
 │   │   ├── api.py, auth.py      dashboard API + logins
 │   │   ├── users.py             add / remove dashboard logins
 │   │   ├── intake.py            every enquiry enters here: clean, dedupe, queue the call
