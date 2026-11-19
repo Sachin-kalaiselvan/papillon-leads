@@ -74,7 +74,7 @@ class Config:
     smtp_user: str = field(default_factory=lambda: _env("SMTP_USER"))
     smtp_password: str = field(default_factory=lambda: _env("SMTP_PASSWORD"))
     mail_from: str = field(default_factory=lambda: _env("MAIL_FROM"))
-    dashboard_url: str = field(default_factory=lambda: _env("DASHBOARD_URL", "https://papillon-leads.vercel.app").rstrip("/"))
+    dashboard_url: str = field(default_factory=lambda: _env("DASHBOARD_URL", "https://leads.papilloninteriors.in").rstrip("/"))
 
 
 cfg = Config()

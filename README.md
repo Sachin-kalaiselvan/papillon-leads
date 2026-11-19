@@ -71,10 +71,10 @@ sudo cp deploy/papillon-leads.service /etc/systemd/system/
 sudo systemctl enable --now papillon-leads
 sudo cp deploy/nginx-leads.conf /etc/nginx/sites-available/leads
 sudo ln -s /etc/nginx/sites-available/leads /etc/nginx/sites-enabled/
-sudo certbot --nginx -d leads.theingredientlist.co && sudo systemctl reload nginx
-curl https://leads.theingredientlist.co/health      # → {"ok":true}
+sudo certbot --nginx -d leadsapi.papilloninteriors.in && sudo systemctl reload nginx
+curl https://leadsapi.papilloninteriors.in/health      # → {"ok":true}
 ```
-Namecheap: add an A record `leads` → the VPS IP.
+GoDaddy (papilloninteriors.in → DNS): add an A record `leadsapi` → the VPS IP. The dashboard goes on `leads.papilloninteriors.in` (step 6).
 
 ### 3. Calling (Exotel)
 1. Exotel account with KYC, buy a Bengaluru ExoPhone (080…).
@@ -89,16 +89,16 @@ Use a number branded Papillon Interiors. Create three templates (Utility categor
 - `papillon_missed_call` — *Hi {{1}}, we just tried calling you from Papillon Interiors about your interiors enquiry. Reply here to continue on WhatsApp, or tell us a good time to call.*
 - `papillon_new_lead` (to the studio) — *New {{1}} lead {{2}}: {{3}}. {{4}} Open: {{5}}*
 
-Webhook URL: `https://leads.theingredientlist.co/webhooks/whatsapp`, verify token = `WA_VERIFY_TOKEN`, subscribe to `messages`.
+Webhook URL: `https://leadsapi.papilloninteriors.in/webhooks/whatsapp`, verify token = `WA_VERIFY_TOKEN`, subscribe to `messages`.
 
 ### 5. Lead sources
 - **Meta Lead Ads** — form type *Higher intent*. Questions: full name, phone, email, plus custom questions *Project / society name*, *Locality*, *BHK*, *Possession status*, *Interior budget* (multiple choice: under 10 L / 10–15 L / 15–25 L / 25–40 L / 40 L+), *What do you need?*. Custom disclaimer: *"Papillon Interiors may call me (including an automated assistant) and WhatsApp me about my enquiry."* Webhook: `…/webhooks/meta` (field `leadgen`), page token in `.env`.
 - **Google Ads lead form** — Webhook URL `…/webhooks/google`, key = `GOOGLE_LEAD_KEY`.
-- **Website** — `website/EnquiryForm.tsx` → in the Papillon site repo put it at `src/components/EnquiryForm.tsx`, render `<EnquiryForm />` on the contact/consultation section, add `VITE_LEADS_API=https://leads.theingredientlist.co` in that project's Vercel env vars, and add the site URL to `ALLOWED_ORIGINS`.
+- **Website** — `website/EnquiryForm.tsx` → in the Papillon site repo put it at `src/components/EnquiryForm.tsx`, render `<EnquiryForm />` on the contact/consultation section, add `VITE_LEADS_API=https://leadsapi.papilloninteriors.in` in that project's Vercel env vars, and add the site URL to `ALLOWED_ORIGINS`.
 - **CSV** (builder handover lists, referrals) — `POST /admin/import` with the admin token. Rows need a `consent` column = yes, otherwise they're stored but never auto-called.
 
 ### 6. Dashboard (Vercel)
-Vercel → Add New → Project → papillon-leads → **Root Directory: `dashboard`** (click "Import single project" next to dashboard — the backend is not deployed on Vercel) → env var `VITE_API_URL=https://leads.theingredientlist.co` → deploy. Without that variable it runs in demo mode with sample data. Put the Vercel URL in the backend's `DASHBOARD_URL` and `ALLOWED_ORIGINS`.
+Vercel → Add New → Project → papillon-leads → **Root Directory: `dashboard`** (click "Import single project" next to dashboard — the backend is not deployed on Vercel) → env var `VITE_API_URL=https://leadsapi.papilloninteriors.in` → deploy. Without that variable it runs in demo mode with sample data. Then Vercel project → Settings → Domains → add `leads.papilloninteriors.in` and put the CNAME it shows into GoDaddy DNS (name `leads`).
 
 ### 7. Nightly database backup
 ```bash

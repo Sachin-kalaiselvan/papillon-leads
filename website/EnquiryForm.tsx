@@ -1,9 +1,9 @@
 // Papillon website enquiry form → lead pipeline.
 // Drop into the Papillon site and render <EnquiryForm /> on the consultation page / contact section.
-// Set VITE_LEADS_API=https://leads.theingredientlist.co in the site's Vercel env vars.
+// Set VITE_LEADS_API=https://leadsapi.papilloninteriors.in in the site's Vercel env vars.
 import { useEffect, useState, type FormEvent } from "react";
 
-const API = (import.meta as any).env?.VITE_LEADS_API ?? "https://leads.theingredientlist.co";
+const API = (import.meta as any).env?.VITE_LEADS_API ?? "https://leadsapi.papilloninteriors.in";
 const CONSENT =
   "I agree that Papillon Interiors may call me (including an automated assistant) and message me on WhatsApp about my interiors enquiry.";
 
