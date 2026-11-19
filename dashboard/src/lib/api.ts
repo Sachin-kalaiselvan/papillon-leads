@@ -1,5 +1,5 @@
-import { seed } from "./demo";
-import type { Call, Campaign, Lead, LeadEvent, Message, Org, Project, ReportRow, Settings, Spend, Stage } from "./types";
+import { demoProspects, seed } from "./demo";
+import type { Call, Campaign, CrawlState, Lead, LeadEvent, Message, Org, Project, Prospect, ProspectStatus, ReportRow, Settings, Spend, Stage } from "./types";
 
 export interface Snapshot {
   leads: Lead[];
@@ -27,6 +27,10 @@ export interface DataSource {
   addSpend(s: Omit<Spend, "id">): Promise<void>;
   addProject(p: Omit<Project, "id">): Promise<void>;
   removeProject(id: string): Promise<void>;
+  prospects(): Promise<{ prospects: Prospect[]; state: CrawlState }>;
+  updateProspect(id: string, u: { status?: ProspectStatus; notes?: string }): Promise<void>;
+  prospectToProject(id: string, from: string, to: string): Promise<void>;
+  crawlNow(feed: "projects" | "posts" | "partners"): Promise<number>;
   subscribe(onChange: () => void): () => void;
 }
 
@@ -65,6 +69,10 @@ function live(base: string): DataSource {
     async addSpend(s) { await post("/api/spend", s); },
     async addProject(p) { await post("/api/projects", p); },
     async removeProject(id) { await call(`/api/projects/${id}`, { method: "DELETE" }); },
+    prospects: () => call("/api/prospects"),
+    async updateProspect(id, u) { await post(`/api/prospects/${id}`, u); },
+    async prospectToProject(id, from, to) { await post(`/api/prospects/${id}/to-projects`, { possession_from: from, possession_to: to }); },
+    async crawlNow(feed) { return (await call<{ new: number }>(`/api/crawl/${feed}`, { method: "POST" })).new; },
     subscribe(onChange) {
       // refresh every 20 s and whenever the tab comes back into view
       const t = window.setInterval(() => { if (!document.hidden) onChange(); }, 20000);
@@ -78,7 +86,7 @@ function live(base: string): DataSource {
 // ── Demo: sample data kept in this browser ─────────────────────
 const DEMO_KEY = "papillon-demo-v1";
 function demo(): DataSource {
-  const read = (): Snapshot & { messagesBy: Record<string, Message[]>; org: Org; signedIn: boolean } => {
+  const read = (): Snapshot & { messagesBy: Record<string, Message[]>; org: Org; signedIn: boolean; prospects?: { prospects: Prospect[]; state: CrawlState } } => {
     try {
       const raw = localStorage.getItem(DEMO_KEY);
       if (raw) return JSON.parse(raw);
@@ -124,6 +132,23 @@ function demo(): DataSource {
     },
     async addProject(p) { db.projects.push({ ...p, id: id() }); emit(); },
     async removeProject(pid) { db.projects = db.projects.filter((p) => p.id !== pid); emit(); },
+    async prospects() {
+      if (!db.prospects) db.prospects = demoProspects();
+      return db.prospects;
+    },
+    async updateProspect(pid, u) {
+      const p = db.prospects?.prospects.find((x: Prospect) => x.id === pid);
+      if (p) Object.assign(p, u);
+      emit();
+    },
+    async prospectToProject(pid, from, to) {
+      const p = db.prospects?.prospects.find((x: Prospect) => x.id === pid);
+      if (!p) return;
+      p.status = "added";
+      db.projects.push({ id: pid, name: p.name ?? "", builder: null, locality: p.locality, possession_from: from || null, possession_to: to || null });
+      emit();
+    },
+    async crawlNow() { return 0; },
     subscribe(f) { listeners.add(f); return () => { listeners.delete(f); }; },
   };
 }

@@ -1,5 +1,5 @@
 // Sample data so the dashboard can be previewed before the backend is connected.
-import type { Call, Campaign, Lead, LeadEvent, Message, Project, ReportRow, Settings, Spend, Stage, Status, Temperature } from "./types";
+import type { CrawlState, Prospect, Call, Campaign, Lead, LeadEvent, Message, Project, ReportRow, Settings, Spend, Stage, Status, Temperature } from "./types";
 
 let s = 7;
 const rnd = () => ((s = (s * 16807) % 2147483647) - 1) / 2147483646;
@@ -177,4 +177,42 @@ export function seed() {
   };
   const reports: ReportRow[] = [];
   return { leads, calls, events, campaigns, spend, projects, settings, reports, messagesBy };
+}
+
+export function demoProspects(): { prospects: Prospect[]; state: CrawlState } {
+  s = 21;
+  const now = Date.now();
+  const at = (h: number) => new Date(now - h * 3600000).toISOString();
+  const base = { source: "osm", city: "Bengaluru", lat: null, lon: null, phone: null, website: null, email: null, url: null,
+                 body: null, posted_at: null, notes: null, data: {}, status: "new" as const };
+  const projects: Prospect[] = ["Amberwood Residences", "Lakeview Grande", "Silver Oak Enclave", "Banyan Greens", "Orchid Springs",
+    "Riverstone Park", "Meridian Towers", "Palm Court Villas"].map((n, i) => ({
+    ...base, id: "pr" + i, kind: "project", name: n, category: i === 7 ? "villas" : "apartments",
+    locality: PROJECTS[i % PROJECTS.length][1], url: "https://www.openstreetmap.org/", score: 50 + Math.round(rnd() * 20),
+    ring_km: 8 + i * 4, found_at: at(i * 7), status: i < 2 ? "added" : "new",
+  }));
+  const posts: Prospect[] = [
+    ["Got keys to our 3BHK in Sarjapur — looking for interior designer recommendations", "Budget around 18–20L for full home. Any reliable designers who did good work recently?", 75],
+    ["Modular kitchen + wardrobes for new flat in Hebbal, suggestions?", "Possession next month. Want quotes from 2-3 designers.", 65],
+    ["NRI here — bought a villa off Kanakapura Road, need turnkey interiors", "Will be in Dubai, so need someone who can manage end to end with video updates.", 80],
+    ["Is 15 lakhs enough for a 3BHK full interior in Whitefield?", "Handover in Jan. Trying to figure out a realistic budget.", 55],
+    ["Recommendations for carpenters vs interior firms?", "2BHK in Electronic City, small budget.", 30],
+  ].map(([t, b, sc], i) => ({ ...base, id: "po" + i, kind: "post" as const, source: "reddit", name: t as string, body: b as string,
+    category: i === 2 ? "r/NRI" : "r/bangalore", url: "https://www.reddit.com/r/bangalore/", score: sc as number,
+    posted_at: at(5 + i * 19), ring_km: null, locality: null, found_at: at(4 + i * 19), status: i === 3 ? "contacted" as const : "new" as const }));
+  const cats = ["builder / developer", "estate agent", "property manager", "apartment association", "estate agent", "builder / developer"];
+  const names = ["Northstar Builders", "Sunrise Realty", "Keystone Property Management", "Cedar Heights Apartment Owners Association",
+    "Greenfield Properties", "Vantage Developers", "Harbour Estates", "Crestline Facility Services", "Maple Homes Realty",
+    "Orchid Springs Owners Association", "Summit Infra Projects", "BlueOak Realty"];
+  const partners: Prospect[] = names.map((n, i) => ({ ...base, id: "pa" + i, kind: "partner" as const, name: n,
+    category: cats[i % cats.length], locality: PROJECTS[(i + 3) % PROJECTS.length][1],
+    phone: i % 3 === 2 ? null : `+91 80 ${4000 + i * 37} ${1000 + i * 91}`, website: i % 2 ? "https://example.com" : null,
+    url: "https://www.openstreetmap.org/", score: 45 + Math.round(rnd() * 45), ring_km: 5 * (1 + (i % 5)), found_at: at(i * 3),
+    status: i === 1 ? "contacted" as const : i === 4 ? "partner" as const : "new" as const }));
+  const rings = [5, 10, 15, 20, 25].map((km, i) => ({ km, found: 3 + i * 2, new: 2 + i, at: at(30 - i * 6) }));
+  return {
+    prospects: [...projects, ...posts, ...partners],
+    state: { projects: { last_run: at(5), found: 8, new: 2 }, posts: { last_run: at(1), found: 5, new: 1 },
+             partners: { last_run: at(2), next_ring_km: 30, max_ring_km: 60, cycle: 1, rings } },
+  };
 }

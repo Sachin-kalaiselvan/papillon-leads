@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from loguru import logger
 
-from . import api, db, followup, reports, sources, whatsapp
+from . import api, crawler, db, followup, reports, sources, whatsapp
 from .config import cfg
 from .intake import ingest
 
@@ -26,6 +26,7 @@ async def lifespan(_app):
     await db.open_pool()
     _bg.append(asyncio.create_task(followup.run_forever()))
     _bg.append(asyncio.create_task(reports.run_forever()))
+    _bg.append(asyncio.create_task(crawler.run_forever()))
     yield
     for t in _bg:
         t.cancel()

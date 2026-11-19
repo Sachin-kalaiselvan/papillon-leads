@@ -238,3 +238,43 @@ create or replace function touch_updated_at() returns trigger language plpgsql a
 begin new.updated_at = now(); return new; end $$;
 drop trigger if exists leads_touch on leads;
 create trigger leads_touch before update on leads for each row execute function touch_updated_at();
+
+-- ─────────────────────────────────────────────────────────────
+-- Prospects found by the crawler (kept apart from leads)
+--   kind = 'project'  → apartment/villa projects being built or handed over
+--   kind = 'post'     → people publicly asking for an interior designer
+--   kind = 'partner'  → businesses that can refer homeowners (builders, agents, property managers, associations)
+-- ─────────────────────────────────────────────────────────────
+create table if not exists prospects (
+  id           uuid primary key default gen_random_uuid(),
+  kind         text not null check (kind in ('project','post','partner')),
+  source       text not null,                 -- osm / reddit / google
+  external_id  text not null,
+  name         text,
+  category     text,
+  locality     text,
+  city         text,
+  lat          double precision,
+  lon          double precision,
+  phone        text,
+  website      text,
+  email        text,
+  url          text,
+  body         text,
+  posted_at    timestamptz,
+  score        int not null default 0,
+  ring_km      int,
+  status       text not null default 'new' check (status in ('new','contacted','interested','partner','added','not_relevant')),
+  notes        text,
+  data         jsonb not null default '{}',
+  found_at     timestamptz not null default now(),
+  updated_at   timestamptz not null default now(),
+  unique (source, external_id)
+);
+create index if not exists prospects_kind on prospects (kind, status, found_at desc);
+
+create table if not exists crawl_state (
+  key        text primary key,
+  value      jsonb not null default '{}',
+  updated_at timestamptz not null default now()
+);

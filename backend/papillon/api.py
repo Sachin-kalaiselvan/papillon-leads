@@ -159,3 +159,50 @@ async def add_project(request: Request, user: dict = Depends(agency_only)):
 async def remove_project(project_id: str, user: dict = Depends(agency_only)):
     await db.execute("delete from projects where id = %s", [project_id])
     return {"ok": True}
+
+
+# ── Prospects (crawler results) — agency only ───────────────────
+PROSPECT_STATUSES = ("new", "contacted", "interested", "partner", "added", "not_relevant")
+
+
+@router.get("/prospects")
+async def prospects(user: dict = Depends(agency_only)):
+    rows = await db.fetchall(
+        """select * from prospects where status <> 'not_relevant' or updated_at > now() - interval '7 days'
+           order by score desc, found_at desc limit 3000""")
+    state = {r["key"]: r["value"] for r in await db.fetchall("select key, value from crawl_state")}
+    return jsonable_encoder({"prospects": rows, "state": state})
+
+
+@router.post("/prospects/{pid}")
+async def update_prospect(pid: str, request: Request, user: dict = Depends(agency_only)):
+    b = await request.json()
+    if b.get("status") and b["status"] not in PROSPECT_STATUSES:
+        raise HTTPException(400, "bad status")
+    row = await db.fetchone(
+        """update prospects set status = coalesce(%s, status), notes = coalesce(%s, notes), updated_at = now()
+           where id = %s returning *""", [b.get("status"), b.get("notes"), pid])
+    return jsonable_encoder(row)
+
+
+@router.post("/prospects/{pid}/to-projects")
+async def prospect_to_projects(pid: str, request: Request, user: dict = Depends(agency_only)):
+    b = await request.json()
+    p = await db.fetchone("select * from prospects where id = %s and kind = 'project'", [pid])
+    if not p:
+        raise HTTPException(404)
+    await db.execute(
+        """insert into projects (name, builder, locality, possession_from, possession_to) values (%s,%s,%s,%s,%s)
+           on conflict (name, builder) do nothing""",
+        [p["name"], b.get("builder") or (p["data"] or {}).get("developer") or "", p["locality"],
+         b.get("possession_from") or None, b.get("possession_to") or None])
+    await db.execute("update prospects set status = 'added', updated_at = now() where id = %s", [pid])
+    return {"ok": True}
+
+
+@router.post("/crawl/{feed}")
+async def crawl_now(feed: str, user: dict = Depends(agency_only)):
+    from . import crawler
+    if feed not in crawler.SCHEDULE:
+        raise HTTPException(400)
+    return {"new": await crawler.run_feed(feed)}

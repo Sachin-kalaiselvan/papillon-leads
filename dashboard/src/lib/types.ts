@@ -158,3 +158,37 @@ export const STAGES: { key: Stage; label: string }[] = [
   { key: "won", label: "Won" },
   { key: "lost", label: "Lost" },
 ];
+
+export type ProspectKind = "project" | "post" | "partner";
+export type ProspectStatus = "new" | "contacted" | "interested" | "partner" | "added" | "not_relevant";
+
+export interface Prospect {
+  id: string;
+  kind: ProspectKind;
+  source: string;
+  name: string | null;
+  category: string | null;
+  locality: string | null;
+  city: string | null;
+  lat: number | null;
+  lon: number | null;
+  phone: string | null;
+  website: string | null;
+  email: string | null;
+  url: string | null;
+  body: string | null;
+  posted_at: string | null;
+  score: number;
+  ring_km: number | null;
+  status: ProspectStatus;
+  notes: string | null;
+  data: Record<string, any>;
+  found_at: string;
+}
+
+export interface CrawlState {
+  projects?: { last_run?: string; found?: number; new?: number; last_error?: string };
+  posts?: { last_run?: string; found?: number; new?: number; errors?: string[]; last_error?: string };
+  partners?: { last_run?: string; next_ring_km?: number; max_ring_km?: number; cycle?: number;
+               rings?: { km: number; found: number; new: number; at: string }[]; last_error?: string };
+}

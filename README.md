@@ -11,6 +11,7 @@ papillon-leads/
 │   │   ├── api.py, auth.py      dashboard API + logins
 │   │   ├── users.py             add / remove dashboard logins
 │   │   ├── intake.py            every enquiry enters here: clean, dedupe, queue the call
+│   │   ├── crawler.py           Prospects: projects being built, people asking, referral partners
 │   │   ├── followup.py          opens the WhatsApp chat, reminders, contact window
 │   │   ├── whatsapp.py          the WhatsApp assistant (Groq free tier)
 │   │   ├── qualifier.py         the script, what gets saved, what happens after a conversation
@@ -104,6 +105,14 @@ mkdir -p /home/sachin/backups
 Keeps the last 7 days (one file per weekday).
 
 ---
+
+## Prospects crawler (runs on its own)
+Three feeds, shown on the dashboard's **Prospects** page (your login only), never messaged automatically:
+- **Projects being built** — residential construction sites around Bengaluru from OpenStreetMap, daily. "Add to handover list" puts one into Rules → Projects in handover.
+- **People asking** — public Reddit posts asking for interior designers in Bengaluru, every 3 hours. Reply on the post.
+- **Referral partners** — builders, estate agents, property managers, apartment associations, searched in 5 km rings out to 60 km from central Bengaluru (one ring every 2 hours, then starts a fresh pass). Add `GOOGLE_MAPS_KEY` to also search Google Maps (more phone numbers).
+
+After pulling new code, re-run `database/schema.sql` once — it only adds the new tables.
 
 ## Where to find the right homeowners (beyond Karnataka)
 

@@ -50,6 +50,10 @@ class Config:
     meta_app_secret: str = field(default_factory=lambda: _env("META_APP_SECRET"))
     graph_version: str = field(default_factory=lambda: _env("META_GRAPH_VERSION", "v21.0"))
 
+    # Crawler (Prospects page). GOOGLE_MAPS_KEY is optional — OpenStreetMap is used either way
+    crawler_enabled: bool = field(default_factory=lambda: _env("CRAWLER_ENABLED", "true") == "true")
+    google_maps_key: str = field(default_factory=lambda: _env("GOOGLE_MAPS_KEY"))
+
     # Google Ads lead form webhook
     google_lead_key: str = field(default_factory=lambda: _env("GOOGLE_LEAD_KEY"))
 
