@@ -34,7 +34,7 @@ function Login() {
         <img src={threxaLogo} alt="Threxa" className="login-threxa" />
         <div className="login-for"><span>for</span></div>
         <Butterfly size={120} />
-        <p>Every Papillon enquiry, called and understood — before it reaches the studio.</p>
+        <p>Every Papillon enquiry, reached and understood — before it reaches the studio.</p>
       </motion.div>
       <motion.form className="login-card" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ ease, duration: 0.6, delay: 0.2 }}
         onSubmit={async (e) => {
