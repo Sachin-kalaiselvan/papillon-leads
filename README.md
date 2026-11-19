@@ -4,10 +4,12 @@ Ads and forms bring in enquiries → each one gets an automatic call within minu
 
 ```
 papillon-leads/
-├── supabase/schema.sql          database, access rules, stage-update function
+├── database/schema.sql          PostgreSQL tables (runs on your VPS — no Supabase)
 ├── backend/                     runs on the VPS (Python)
 │   ├── papillon/
 │   │   ├── main.py              web endpoints (forms, Meta, Google, Exotel, WhatsApp, admin)
+│   │   ├── api.py, auth.py      dashboard API + logins
+│   │   ├── users.py             add / remove dashboard logins
 │   │   ├── intake.py            every enquiry enters here: clean, dedupe, queue the call
 │   │   ├── dialer.py            places calls, retries, call window, missed-call WhatsApp
 │   │   ├── voice_bot.py         the phone conversation (Exotel → Deepgram → GPT → Sarvam voice)
@@ -46,18 +48,15 @@ papillon-leads/
 
 ## Setup
 
-### 1. Database (Supabase)
-1. Create a project (region Mumbai).
-2. SQL Editor → paste all of `supabase/schema.sql` → Run.
-3. Authentication → Users → add yourself and each Papillon team member (email + password).
-4. SQL Editor, once per person:
-   ```sql
-   insert into team_members (user_id, email, name, org, role)
-   select id, email, 'Sachin', 'agency', 'admin' from auth.users where email = 'sachin@theingredientlist.co';
-   insert into team_members (user_id, email, name, org, role)
-   select id, email, 'Papillon Sales', 'papillon', 'sales' from auth.users where email = 'sales@papillon…';
-   ```
-   `agency` sees everything. `papillon` sees only forwarded leads.
+### 1. Database (PostgreSQL on the VPS — free)
+```bash
+sudo apt update && sudo apt install -y postgresql
+sudo -u postgres psql -c "create user papillon with password 'CHOOSE-A-PASSWORD';"
+sudo -u postgres psql -c "create database papillon owner papillon;"
+sudo -u postgres psql -d papillon -c "create extension if not exists pgcrypto;"
+```
+`DATABASE_URL=postgresql://papillon:CHOOSE-A-PASSWORD@localhost:5432/papillon`
+The tables are created in step 2 after the code is on the server.
 
 ### 2. Backend on the VPS
 ```bash
@@ -65,6 +64,9 @@ cd /home/sachin && git clone https://github.com/Sachin-kalaiselvan/papillon-lead
 cd /home/sachin/papillon-leads/backend
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 cp .env.example .env && nano .env            # fill in keys
+psql "postgresql://papillon:CHOOSE-A-PASSWORD@localhost:5432/papillon" -f ../database/schema.sql
+.venv/bin/python -m papillon.users add sachin@theingredientlist.co "Sachin" agency
+.venv/bin/python -m papillon.users add <papillon email> "Papillon Sales" papillon
 sudo cp deploy/papillon-leads.service /etc/systemd/system/
 sudo systemctl enable --now papillon-leads
 sudo cp deploy/nginx-leads.conf /etc/nginx/sites-available/leads
@@ -96,7 +98,14 @@ Webhook URL: `https://leads.theingredientlist.co/webhooks/whatsapp`, verify toke
 - **CSV** (builder handover lists, referrals) — `POST /admin/import` with the admin token. Rows need a `consent` column = yes, otherwise they're stored but never auto-called.
 
 ### 6. Dashboard (Vercel)
-New Vercel project from the `dashboard/` folder → env vars `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` → deploy. Without those two it runs in demo mode with sample data (handy to show Papillon before going live). Put its URL in the backend's `DASHBOARD_URL`.
+Vercel → Add New → Project → papillon-leads → **Root Directory: `dashboard`** (click "Import single project" next to dashboard — the backend is not deployed on Vercel) → env var `VITE_API_URL=https://leads.theingredientlist.co` → deploy. Without that variable it runs in demo mode with sample data. Put the Vercel URL in the backend's `DASHBOARD_URL` and `ALLOWED_ORIGINS`.
+
+### 7. Nightly database backup
+```bash
+mkdir -p /home/sachin/backups
+(crontab -l; echo '30 2 * * * pg_dump "postgresql://papillon:CHOOSE-A-PASSWORD@localhost:5432/papillon" | gzip > /home/sachin/backups/papillon-$(date +\%a).sql.gz') | crontab -
+```
+Keeps the last 7 days (one file per weekday).
 
 ---
 
@@ -120,5 +129,5 @@ Ad copy should name Papillon and say a designer will call — never "get 3 free 
 ```bash
 cd backend
 pytest tests/test_rules.py                                   # rules only
-TEST_DATABASE_URL=postgresql://… pytest tests/               # + full journey on a scratch database
+TEST_DATABASE_URL=postgresql://… pytest tests/   # scratch DB with database/schema.sql loaded               # + full journey on a scratch database
 ```

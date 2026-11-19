@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from loguru import logger
 
-from . import db, dialer, reports, sources, whatsapp
+from . import api, db, dialer, reports, sources, whatsapp
 from .config import cfg
 from .intake import ingest
 
@@ -34,6 +34,7 @@ async def lifespan(_app):
 
 app = FastAPI(title="Papillon lead pipeline", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=cfg.allowed_origins or ["*"], allow_methods=["*"], allow_headers=["*"])
+app.include_router(api.router)
 
 
 def admin(authorization: str = Header(default="")):

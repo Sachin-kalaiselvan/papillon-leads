@@ -1,4 +1,3 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { seed } from "./demo";
 import type { Call, Campaign, Lead, LeadEvent, Message, Org, Project, ReportRow, Settings, Spend, Stage } from "./types";
 
@@ -31,68 +30,47 @@ export interface DataSource {
   subscribe(onChange: () => void): () => void;
 }
 
-const URL = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-const KEY = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+const API = (import.meta.env.VITE_API_URL as string | undefined)?.replace(/\/$/, "");
+const TOKEN_KEY = "papillon-token";
 
-// ── Live: Supabase ──────────────────────────────────────────────
-function live(sb: SupabaseClient): DataSource {
-  const must = <T,>(r: { data: T | null; error: any }) => {
-    if (r.error) throw new Error(r.error.message);
-    return r.data as T;
+// ── Live: your own server (backend/papillon/api.py) ─────────────
+function live(base: string): DataSource {
+  const token = () => { try { return localStorage.getItem(TOKEN_KEY); } catch { return null; } };
+  const call = async <T,>(path: string, init: RequestInit = {}): Promise<T> => {
+    const r = await fetch(base + path, {
+      ...init,
+      headers: { "content-type": "application/json", ...(token() ? { authorization: `Bearer ${token()}` } : {}), ...(init.headers || {}) },
+    });
+    if (r.status === 401) { try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ } }
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || `Server error ${r.status}`);
+    return r.json();
   };
+  const post = (path: string, body: unknown, method = "POST") => call(path, { method, body: JSON.stringify(body) });
   return {
     mode: "live",
     async session() {
-      const { data } = await sb.auth.getSession();
-      const u = data.session?.user;
-      if (!u) return null;
-      const tm = await sb.from("team_members").select("org").eq("user_id", u.id).maybeSingle();
-      if (!tm.data) throw new Error("This login isn't on the team list yet. Ask the admin to add you.");
-      return { email: u.email ?? "", org: tm.data.org as Org };
+      if (!token()) return null;
+      try { return await call<{ email: string; org: Org }>("/api/me"); } catch { return null; }
     },
     async signIn(email, password) {
-      const { error } = await sb.auth.signInWithPassword({ email, password });
-      if (error) throw new Error(error.message);
+      const r = await call<{ token: string }>("/api/login", { method: "POST", body: JSON.stringify({ email, password }) });
+      try { localStorage.setItem(TOKEN_KEY, r.token); } catch { /* ignore */ }
     },
-    async signOut() { await sb.auth.signOut(); },
-    async load() {
-      const [leads, calls, events, campaigns, spend, projects, settings, reports] = await Promise.all([
-        sb.from("leads").select("*").order("created_at", { ascending: false }).limit(5000),
-        sb.from("calls").select("*").order("started_at", { ascending: false }).limit(3000),
-        sb.from("lead_events").select("*").order("at", { ascending: false }).limit(400),
-        sb.from("campaigns").select("*").order("created_at", { ascending: false }),
-        sb.from("campaign_spend").select("*"),
-        sb.from("projects").select("*").order("possession_from"),
-        sb.from("settings").select("*").eq("id", 1).maybeSingle(),
-        sb.from("reports").select("*").order("period_start", { ascending: false }).limit(120),
-      ]);
-      return {
-        leads: must(leads), calls: must(calls), events: must(events), campaigns: must(campaigns),
-        spend: must(spend), projects: must(projects), settings: must(settings), reports: must(reports),
-      };
-    },
-    async messages(leadId) {
-      return must(await sb.from("messages").select("*").eq("lead_id", leadId).order("created_at"));
-    },
-    async updateStage(leadId, stage, u) {
-      must(await sb.rpc("update_lead_stage", {
-        p_lead: leadId, p_stage: stage, p_quote: u.quote ?? null, p_won: u.won ?? null,
-        p_lost_reason: u.lostReason ?? null, p_note: u.note ?? null,
-      }));
-    },
-    async saveSettings(s) { must(await sb.from("settings").update({ ...s, updated_at: new Date().toISOString() }).eq("id", 1)); },
-    async addCampaign(c) { must(await sb.from("campaigns").insert(c)); },
-    async addSpend(s) { must(await sb.from("campaign_spend").upsert(s, { onConflict: "campaign_id,spend_date" })); },
-    async addProject(p) { must(await sb.from("projects").insert(p)); },
-    async removeProject(id) { must(await sb.from("projects").delete().eq("id", id)); },
+    async signOut() { try { localStorage.removeItem(TOKEN_KEY); } catch { /* ignore */ } },
+    load: () => call<Snapshot>("/api/snapshot"),
+    messages: (leadId) => call<Message[]>(`/api/leads/${leadId}/messages`),
+    async updateStage(leadId, stage, u) { await post(`/api/leads/${leadId}/stage`, { stage, ...u }); },
+    async saveSettings(s) { await post("/api/settings", s, "PUT"); },
+    async addCampaign(c) { await post("/api/campaigns", c); },
+    async addSpend(s) { await post("/api/spend", s); },
+    async addProject(p) { await post("/api/projects", p); },
+    async removeProject(id) { await call(`/api/projects/${id}`, { method: "DELETE" }); },
     subscribe(onChange) {
-      let t: number | undefined;
-      const bump = () => { clearTimeout(t); t = window.setTimeout(onChange, 400); };
-      const ch = sb.channel("pipeline")
-        .on("postgres_changes", { event: "*", schema: "public", table: "leads" }, bump)
-        .on("postgres_changes", { event: "INSERT", schema: "public", table: "lead_events" }, bump)
-        .subscribe();
-      return () => { sb.removeChannel(ch); };
+      // refresh every 20 s and whenever the tab comes back into view
+      const t = window.setInterval(() => { if (!document.hidden) onChange(); }, 20000);
+      const vis = () => { if (!document.hidden) onChange(); };
+      document.addEventListener("visibilitychange", vis);
+      return () => { clearInterval(t); document.removeEventListener("visibilitychange", vis); };
     },
   };
 }
@@ -150,7 +128,7 @@ function demo(): DataSource {
   };
 }
 
-export const api: DataSource = URL && KEY ? live(createClient(URL, KEY)) : demo();
+export const api: DataSource = API ? live(API) : demo();
 
 export function resetDemo() {
   try { localStorage.removeItem(DEMO_KEY); } catch { /* ignore */ }

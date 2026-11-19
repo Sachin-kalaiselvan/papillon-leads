@@ -1,5 +1,5 @@
--- Papillon Interiors — lead pipeline schema
--- Run once in Supabase: Dashboard → SQL Editor → paste → Run.
+-- Papillon Interiors — lead pipeline schema (plain PostgreSQL, runs on your own VPS)
+-- Run: psql "$DATABASE_URL" -f database/schema.sql
 -- Safe to re-run: every object is created with IF NOT EXISTS / OR REPLACE.
 
 create extension if not exists pgcrypto;
@@ -220,120 +220,21 @@ create table if not exists reports (
   unique (kind, period_start)
 );
 
--- Who can log in to the dashboard.
---   org = 'agency'   → you: sees every enquiry, calls, spend, settings
+-- Dashboard logins. Manage with: .venv/bin/python -m papillon.users add <email> "<name>" agency|papillon
+--   org = 'agency'   → you: sees every enquiry, calls, spend, rules
 --   org = 'papillon' → Papillon's team: sees only forwarded (qualified) leads
 create table if not exists team_members (
-  user_id   uuid primary key,
-  email     text unique not null,
-  name      text,
-  org       text not null check (org in ('agency','papillon')),
-  role      text not null default 'sales' check (role in ('admin','sales','viewer')),
-  created_at timestamptz not null default now()
+  id            uuid primary key default gen_random_uuid(),
+  email         text unique not null,
+  name          text,
+  org           text not null check (org in ('agency','papillon')),
+  role          text not null default 'sales' check (role in ('admin','sales','viewer')),
+  password_hash text,
+  active        boolean not null default true,
+  created_at    timestamptz not null default now()
 );
 
 create or replace function touch_updated_at() returns trigger language plpgsql as $$
 begin new.updated_at = now(); return new; end $$;
 drop trigger if exists leads_touch on leads;
 create trigger leads_touch before update on leads for each row execute function touch_updated_at();
-
--- ─────────────────────────────────────────────────────────────
--- Access rules (dashboard uses the anon key + login; backend uses the DB URL directly)
--- ─────────────────────────────────────────────────────────────
-create or replace function my_org() returns text language sql stable security definer set search_path = public as $$
-  select org from team_members where user_id = auth.uid()
-$$;
-
-alter table leads          enable row level security;
-alter table calls          enable row level security;
-alter table messages       enable row level security;
-alter table lead_events    enable row level security;
-alter table reports        enable row level security;
-alter table campaigns      enable row level security;
-alter table campaign_spend enable row level security;
-alter table projects       enable row level security;
-alter table settings       enable row level security;
-alter table team_members   enable row level security;
-
-drop policy if exists leads_read on leads;
-create policy leads_read on leads for select to authenticated using (
-  my_org() = 'agency' or (my_org() = 'papillon' and stage <> 'none')
-);
-
-drop policy if exists calls_read on calls;
-create policy calls_read on calls for select to authenticated using (
-  my_org() = 'agency' or (my_org() = 'papillon' and exists (select 1 from leads l where l.id = lead_id and l.stage <> 'none'))
-);
-
-drop policy if exists messages_read on messages;
-create policy messages_read on messages for select to authenticated using (
-  my_org() = 'agency' or (my_org() = 'papillon' and exists (select 1 from leads l where l.id = lead_id and l.stage <> 'none'))
-);
-
-drop policy if exists events_read on lead_events;
-create policy events_read on lead_events for select to authenticated using (
-  my_org() = 'agency' or (my_org() = 'papillon' and exists (select 1 from leads l where l.id = lead_id and l.stage <> 'none'))
-);
-
-drop policy if exists reports_read on reports;
-create policy reports_read on reports for select to authenticated using (my_org() in ('agency','papillon'));
-
-drop policy if exists campaigns_read on campaigns;
-create policy campaigns_read on campaigns for select to authenticated using (my_org() in ('agency','papillon'));
-drop policy if exists campaigns_write on campaigns;
-create policy campaigns_write on campaigns for all to authenticated using (my_org() = 'agency') with check (my_org() = 'agency');
-
-drop policy if exists spend_read on campaign_spend;
-create policy spend_read on campaign_spend for select to authenticated using (my_org() in ('agency','papillon'));
-drop policy if exists spend_write on campaign_spend;
-create policy spend_write on campaign_spend for all to authenticated using (my_org() = 'agency') with check (my_org() = 'agency');
-
-drop policy if exists projects_read on projects;
-create policy projects_read on projects for select to authenticated using (my_org() in ('agency','papillon'));
-drop policy if exists projects_write on projects;
-create policy projects_write on projects for all to authenticated using (my_org() = 'agency') with check (my_org() = 'agency');
-
-drop policy if exists settings_read on settings;
-create policy settings_read on settings for select to authenticated using (my_org() in ('agency','papillon'));
-drop policy if exists settings_write on settings;
-create policy settings_write on settings for update to authenticated using (my_org() = 'agency') with check (my_org() = 'agency');
-
-drop policy if exists team_self on team_members;
-create policy team_self on team_members for select to authenticated using (user_id = auth.uid() or my_org() = 'agency');
-
--- Papillon's team moves leads through their stages through this one function,
--- so they can't edit qualification data or see unforwarded enquiries.
-create or replace function update_lead_stage(
-  p_lead uuid, p_stage text, p_quote bigint default null, p_won bigint default null,
-  p_lost_reason text default null, p_note text default null
-) returns leads language plpgsql security definer set search_path = public as $$
-declare r leads; who text;
-begin
-  if my_org() is null then raise exception 'not allowed'; end if;
-  if p_stage not in ('forwarded','contacted','consultation_booked','site_visit','quotation_sent','negotiation','won','lost') then
-    raise exception 'bad stage %', p_stage;
-  end if;
-  select email into who from team_members where user_id = auth.uid();
-  update leads set
-    stage = p_stage,
-    stage_updated_at = now(),
-    quote_value = coalesce(p_quote, quote_value),
-    won_value   = case when p_stage = 'won' then coalesce(p_won, quote_value, won_value) else won_value end,
-    lost_reason = case when p_stage = 'lost' then coalesce(p_lost_reason, lost_reason) else lost_reason end,
-    notes = case when p_note is not null and p_note <> '' then concat_ws(E'\n', notes, to_char(now() at time zone 'Asia/Kolkata','DD Mon HH24:MI') || ' — ' || p_note) else notes end
-  where id = p_lead and stage <> 'none'
-  returning * into r;
-  if r.id is null then raise exception 'lead not found'; end if;
-  insert into lead_events (lead_id, kind, detail, actor)
-    values (p_lead, 'stage', jsonb_build_object('stage', p_stage, 'quote', p_quote, 'won', p_won, 'lost_reason', p_lost_reason, 'note', p_note), coalesce(who, 'dashboard'));
-  return r;
-end $$;
-
-grant execute on function update_lead_stage(uuid, text, bigint, bigint, text, text) to authenticated;
-grant execute on function my_org() to authenticated;
-
--- Live activity feed in the dashboard
-do $$ begin
-  begin alter publication supabase_realtime add table lead_events; exception when others then null; end;
-  begin alter publication supabase_realtime add table leads; exception when others then null; end;
-end $$;

@@ -6,7 +6,7 @@ from datetime import date, datetime, time, timedelta, timezone
 
 import pytest
 
-from papillon import db, dialer, forward, intake, notify, qualifier, reports, sources
+from papillon import api, auth, db, dialer, forward, intake, notify, qualifier, reports, sources
 
 URL = os.getenv("TEST_DATABASE_URL")
 pytestmark = pytest.mark.skipif(not URL, reason="TEST_DATABASE_URL not set")
@@ -74,15 +74,16 @@ def test_full_journey(monkeypatch):
         assert ("wa", "+919900000001", "papillon_new_lead") in SENT
         assert any(x[0] == "email" and "[HOT]" in x[2] for x in SENT)
 
-        # 4. Papillon moves it through their stages (dashboard RPC, run as superuser here)
-        tm = "00000000-0000-0000-0000-000000000001"
-        await db.execute("insert into team_members (user_id, email, org) values (%s, 'sales@papillon.example', 'papillon')", [tm])
-        async with db.pool.connection() as conn:
-            await conn.execute(f"set request.uid = '{tm}'")
-            await conn.execute("select update_lead_stage(%s, 'consultation_booked', null, null, null, 'Video call booked')", [lead["id"]])
-            await conn.execute("select update_lead_stage(%s, 'quotation_sent', 1950000)", [lead["id"]])
-            await conn.execute("select update_lead_stage(%s, 'won')", [lead["id"]])
-            await conn.execute("reset request.uid")
+        # 4. Papillon logs in and moves it through their stages
+        await db.execute("insert into team_members (email, org, password_hash) values ('sales@papillon.example', 'papillon', %s)",
+                         [auth.hash_password("studio-pass-1")])
+        tm = await db.fetchone("select * from team_members where email = 'sales@papillon.example'")
+        assert auth.check_password("studio-pass-1", tm["password_hash"]) and not auth.check_password("nope", tm["password_hash"])
+        user = await auth.current_user(f"Bearer {auth.make_token(str(tm['id']))}")
+        assert user["org"] == "papillon"
+        await api.update_stage(lead["id"], "consultation_booked", note="Video call booked", actor=user["email"])
+        await api.update_stage(lead["id"], "quotation_sent", quote=1950000)
+        await api.update_stage(lead["id"], "won")
         won = await db.get_lead(lead["id"])
         assert won["stage"] == "won" and won["won_value"] == 1950000
 
@@ -127,6 +128,8 @@ def test_full_journey(monkeypatch):
         assert nri["spend"] == 4200 and nri["hot"] == 1 and nri["won"] == 1 and nri["cpql"] == 4200
         subj, body, _ = reports.render_weekly(w)
         assert "Cost / qualified" in body
+        snap = await api.snapshot(user)
+        assert len(snap["leads"]) == 1 and snap["leads"][0]["ref"] == lead["ref"]
         await db.close_pool()
 
     run(go())

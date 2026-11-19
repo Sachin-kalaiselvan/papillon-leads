@@ -1,4 +1,4 @@
-"""Thin Postgres layer. The backend talks to Supabase's Postgres directly (pooler URL)."""
+"""Thin Postgres layer. The backend talks to PostgreSQL on the VPS directly."""
 
 import json
 from typing import Any
@@ -19,7 +19,7 @@ async def open_pool(url: str | None = None) -> None:
         min_size=1,
         max_size=10,
         open=False,
-        # Supabase's transaction pooler does not support prepared statements
+        # no prepared statements: also works behind connection poolers
         kwargs={"row_factory": dict_row, "autocommit": True, "prepare_threshold": None},
     )
     await pool.open(wait=True)

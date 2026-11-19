@@ -1,4 +1,4 @@
-// Sample data so the dashboard can be previewed before Supabase is connected.
+// Sample data so the dashboard can be previewed before the backend is connected.
 import type { Call, Campaign, Lead, LeadEvent, Message, Project, ReportRow, Settings, Spend, Stage, Status, Temperature } from "./types";
 
 let s = 7;
